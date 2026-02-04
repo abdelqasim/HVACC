@@ -18,7 +18,7 @@ thresholds:
   fault_present_threshold: 0.6
   
   # Fault classification threshold
-  #fault_type_threshold: 0.6
+  fault_type_threshold: 0.6
   
   # Confidence threshold for reporting
   #min_confidence_threshold: 0.3  # Only report predictions above this confidence
