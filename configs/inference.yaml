@@ -1,0 +1,186 @@
+# Inference Configuration
+# Specifies inference parameters, thresholds, and model loading settings
+
+# Model loading
+model:
+  model_name: "hvac_fdd_rtu"
+  model_alias: "Production"  # Options: Production, Staging, development
+  load_from: "mlflow"  # Options: mlflow, local_path
+  mlflow_tracking_uri: "http://localhost:5000"  # Update for Docker: http://mlflow:5000
+  
+  # If loading from local path
+  local_model_path: "models/best_model.pkl"
+  preprocessor_path: "models/preprocessor.pkl"
+
+# Inference thresholds
+thresholds:
+  # Fault detection threshold
+  fault_present_threshold: 0.5
+  
+  # Fault classification threshold
+  fault_type_threshold: 0.6
+  
+  # Confidence threshold for reporting
+  min_confidence_threshold: 0.3  # Only report predictions above this confidence
+  
+  # Severity thresholds
+  severity_thresholds:
+    low: 0.3
+    medium: 0.6
+    high: 0.8
+
+# Batch processing
+batch:
+  batch_size: 1000  # Process 1000 windows at a time
+  num_workers: 4  # Parallel workers for batch processing
+  timeout_seconds: 300  # Timeout for batch predictions
+
+# Inference output
+output:
+  include_confidence: true
+  include_feature_importance: true
+  include_shap_values: true
+  include_evidence_plots: true
+  include_playbook: true
+  
+  # Report generation
+  generate_report: true
+  report_format: "html"  # Options: html, pdf, json
+
+# Explanations
+explanations:
+  method: "shap"  # Options: shap, permutation, lime
+  
+  # SHAP settings
+  shap:
+    explainer_type: "tree"  # Options: tree, kernel, sampling
+    n_samples: 100  # Number of samples for SHAP computation
+    background_data_size: 100  # Size of background dataset
+  
+  # Feature importance
+  feature_importance:
+    top_k: 10  # Show top 10 features
+    method: "gain"  # Options: gain, split, cover
+  
+  # Evidence selection
+  evidence:
+    n_top_features: 5  # Number of top features to highlight
+    plot_window_size: "2x"  # Plot window 2x the prediction window
+    include_anomaly_scores: true
+
+# Diagnostics
+diagnostics:
+  # Fault playbook
+  playbook_enabled: true
+  playbook_file: "src/diagnostics/playbook.json"
+  
+  # Anomaly detection
+  anomaly_detection:
+    enabled: true
+    method: "isolation_forest"  # Options: isolation_forest, local_outlier_factor
+    contamination: 0.1
+  
+  # Severity scoring
+  severity_scoring:
+    method: "confidence_deviation"  # Options: confidence_deviation, feature_magnitude
+    confidence_weight: 0.6
+    deviation_weight: 0.4
+
+# Caching
+caching:
+  enabled: true
+  cache_dir: "cache/inference"
+  cache_ttl_minutes: 60
+  cache_predictions: true
+
+# API settings
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+  
+  # CORS settings
+  cors:
+    enabled: true
+    allow_origins: ["*"]
+    allow_methods: ["GET", "POST"]
+    allow_headers: ["*"]
+  
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+
+# Logging
+logging:
+  level: "INFO"
+  log_file: "logs/inference.log"
+  log_predictions: true
+  log_explanations: false  # Can be verbose
+  log_errors: true
+
+# Monitoring and drift detection
+monitoring:
+  enabled: true
+  
+  # Data drift detection
+  drift_detection:
+    enabled: true
+    method: "kolmogorov_smirnov"  # Options: kolmogorov_smirnov, wasserstein
+    threshold: 0.05
+  
+  # Model performance monitoring
+  performance_monitoring:
+    enabled: true
+    track_predictions: true
+    track_explanations: false
+  
+  # Alert settings
+  alerts:
+    enabled: true
+    drift_alert: true
+    low_confidence_alert: true
+    confidence_threshold: 0.5
+
+# Fallback and error handling
+error_handling:
+  fallback_model: null  # Path to fallback model if primary fails
+  return_empty_on_error: false  # Return empty result or raise error
+  max_retries: 3
+  retry_delay_seconds: 1
+
+# Performance optimization
+optimization:
+  use_gpu: false  # Set to true if GPU available
+  batch_normalization: true
+  model_quantization: false  # Quantize model for faster inference
+  
+  # Memory management
+  memory:
+    max_cache_size_mb: 1000
+    clear_cache_on_startup: true
+
+# Versioning and compatibility
+versioning:
+  check_model_version: true
+  min_model_version: "1.0.0"
+  max_model_version: "2.0.0"
+  
+  # Feature compatibility
+  feature_compatibility:
+    check_feature_names: true
+    check_feature_order: true
+    check_feature_types: true
+
+# Default values for missing inputs
+defaults:
+  window_size_minutes: 30
+  stride_minutes: 5
+  timezone: "UTC"
+  
+  # Default severity if not computed
+  default_severity_score: 0.5
+  
+  # Default playbook action if not found
+  default_playbook_action: "Contact HVAC technician for inspection"

@@ -1,0 +1,186 @@
+# Feature Engineering Configuration
+# Defines sliding window parameters and feature computation settings
+
+# Sliding window parameters
+windowing:
+  window_size_minutes: 30  # 30-minute windows
+  stride_minutes: 5  # 5-minute stride (75% overlap)
+  min_samples_per_window: 20  # Minimum samples required in window
+
+# Feature computation settings
+features:
+  # Per-point features (computed for each signal independently)
+  per_point:
+    - name: "mean"
+      enabled: true
+      description: "Mean value over window"
+    
+    - name: "std"
+      enabled: true
+      description: "Standard deviation over window"
+    
+    - name: "min"
+      enabled: true
+      description: "Minimum value over window"
+    
+    - name: "max"
+      enabled: true
+      description: "Maximum value over window"
+    
+    - name: "median"
+      enabled: true
+      description: "Median value over window"
+    
+    - name: "quantile_25"
+      enabled: true
+      description: "25th percentile"
+    
+    - name: "quantile_75"
+      enabled: true
+      description: "75th percentile"
+    
+    - name: "range"
+      enabled: true
+      description: "Max - Min"
+    
+    - name: "slope"
+      enabled: true
+      description: "Linear regression slope"
+    
+    - name: "delta"
+      enabled: true
+      description: "Last value - First value"
+    
+    - name: "autocorr_lag1"
+      enabled: true
+      description: "Autocorrelation at lag 1"
+    
+    - name: "autocorr_lag5"
+      enabled: true
+      description: "Autocorrelation at lag 5"
+    
+    - name: "variance"
+      enabled: true
+      description: "Variance (std squared)"
+    
+    - name: "skewness"
+      enabled: true
+      description: "Skewness of distribution"
+    
+    - name: "kurtosis"
+      enabled: true
+      description: "Kurtosis of distribution"
+    
+    - name: "entropy"
+      enabled: false  # Disabled by default, computationally expensive
+      description: "Shannon entropy"
+
+  # Cross-point features (computed between related signals)
+  cross_point:
+    - name: "correlation_supply_return_temp"
+      enabled: true
+      signals: ["supply_temp", "return_temp"]
+      description: "Correlation between supply and return temperatures"
+    
+    - name: "temp_differential"
+      enabled: true
+      signals: ["supply_temp", "return_temp"]
+      description: "Mean temperature differential (return - supply)"
+    
+    - name: "correlation_supply_fan_pressure"
+      enabled: true
+      signals: ["supply_fan_speed", "supply_pressure"]
+      description: "Correlation between fan speed and pressure"
+    
+    - name: "correlation_valve_temp"
+      enabled: true
+      signals: ["heating_valve_position", "supply_temp"]
+      description: "Correlation between valve position and temperature"
+    
+    - name: "pressure_drop_ratio"
+      enabled: true
+      signals: ["supply_pressure", "return_pressure"]
+      description: "Ratio of supply to return pressure"
+
+  # Stability indicators (detect oscillations and instability)
+  stability:
+    - name: "variance_band"
+      enabled: true
+      description: "Variance of rolling variance (detects stability changes)"
+    
+    - name: "oscillation_energy"
+      enabled: true
+      description: "Energy in high-frequency components (FFT-based)"
+    
+    - name: "zero_crossing_rate"
+      enabled: true
+      description: "Rate of sign changes in detrended signal"
+    
+    - name: "mean_absolute_change"
+      enabled: true
+      description: "Mean absolute change between consecutive samples"
+
+# Feature storage settings
+storage:
+  format: "parquet"  # Parquet format for efficient storage
+  compression: "snappy"  # Compression method
+  include_metadata: true  # Include feature metadata
+  metadata_fields:
+    - feature_name
+    - window_start_time
+    - window_end_time
+    - sample_count
+    - missing_count
+    - fault_label
+
+# Feature selection (optional - for reducing dimensionality)
+feature_selection:
+  enabled: false
+  method: "mutual_information"  # Options: mutual_information, permutation, shap
+  n_features_to_select: 50  # Select top 50 features
+  threshold: 0.01  # Minimum importance threshold
+
+# Feature normalization (applied before model training)
+normalization:
+  method: "standardization"  # Options: standardization, normalization, robust
+  fit_on: "training_data"  # Fit on training data only
+  handle_outliers: true
+  outlier_threshold: 5  # Std deviations
+
+# Feature engineering for specific equipment types
+equipment_specific:
+  rtu:
+    additional_features:
+      - "supply_fan_efficiency"  # Supply pressure / fan speed
+      - "cooling_capacity_ratio"  # Temperature differential / cooling valve position
+      - "heating_capacity_ratio"  # Temperature differential / heating valve position
+  
+  single_duct_ahu:
+    additional_features:
+      - "ahu_efficiency"
+      - "damper_response_time"
+  
+  vav:
+    additional_features:
+      - "damper_oscillation_frequency"
+      - "zone_temperature_tracking"
+  
+  chiller:
+    additional_features:
+      - "chiller_cop"  # Coefficient of Performance
+      - "condenser_approach"
+
+# Caching and optimization
+caching:
+  enabled: true
+  cache_dir: "data/feature_cache"
+  cache_features: true
+  cache_ttl_hours: 24
+
+# Logging
+logging:
+  level: "INFO"
+  log_file: "logs/features.log"
+  log_feature_statistics: true
+  log_missing_features: true
+  log_computation_time: true

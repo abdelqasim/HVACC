@@ -1,0 +1,134 @@
+# Dataset Configuration for HVAC FDD Platform
+# Specifies data paths, subsystem selection, and label mapping
+
+subsystem: "rtu"  # Options: rtu, single_duct_ahu, dual_duct_ahu, vav, fan_coil, chiller, boiler
+
+# Data paths
+data_path: "data/raw"
+processed_path: "data/processed"
+sample_data_path: "data/sample"
+
+# LBNL Dataset information
+lbnl_dataset_url: "https://faultdetection.lbl.gov/data/"
+lbnl_openei_url: "https://data.openei.org/submissions/5763"
+
+# Subsystem-specific configurations
+subsystems:
+  rtu:
+    description: "Rooftop Unit"
+    equipment_types: ["supply_fan", "return_fan", "compressor", "heating_coil", "cooling_coil"]
+    typical_faults: ["supply_fan_failure", "return_fan_failure", "compressor_failure", 
+                     "heating_valve_stuck", "cooling_valve_stuck", "sensor_bias"]
+    
+  single_duct_ahu:
+    description: "Single Duct Air Handling Unit"
+    equipment_types: ["supply_fan", "return_fan", "heating_coil", "cooling_coil", "damper"]
+    typical_faults: ["supply_fan_failure", "heating_valve_stuck", "cooling_valve_stuck", 
+                     "damper_stuck", "sensor_bias"]
+    
+  dual_duct_ahu:
+    description: "Dual Duct Air Handling Unit"
+    equipment_types: ["supply_fan", "return_fan", "heating_coil", "cooling_coil", "hot_duct", "cold_duct"]
+    typical_faults: ["supply_fan_failure", "heating_valve_stuck", "cooling_valve_stuck", 
+                     "duct_imbalance", "sensor_bias"]
+    
+  vav:
+    description: "Variable Air Volume Terminal"
+    equipment_types: ["damper", "heating_coil", "temperature_sensor"]
+    typical_faults: ["damper_stuck", "heating_valve_stuck", "sensor_bias", "damper_oscillation"]
+    
+  fan_coil:
+    description: "Fan Coil Unit"
+    equipment_types: ["fan", "heating_coil", "cooling_coil", "temperature_sensor"]
+    typical_faults: ["fan_failure", "heating_valve_stuck", "cooling_valve_stuck", "sensor_bias"]
+    
+  chiller:
+    description: "Chiller Plant"
+    equipment_types: ["compressor", "condenser_fan", "evaporator_pump", "condenser_pump"]
+    typical_faults: ["compressor_failure", "condenser_fan_failure", "pump_failure", "sensor_bias"]
+    
+  boiler:
+    description: "Boiler Plant"
+    equipment_types: ["burner", "pump", "temperature_sensor", "pressure_sensor"]
+    typical_faults: ["burner_failure", "pump_failure", "sensor_bias", "low_efficiency"]
+
+# Label mapping - maps dataset labels to internal fault types
+label_mapping:
+  "normal": 0
+  "fault_1": 1
+  "fault_2": 2
+  "fault_3": 3
+  "fault_4": 4
+  "fault_5": 5
+  "fault_6": 6
+  "fault_7": 7
+  "fault_8": 8
+  "fault_9": 9
+  "fault_10": 10
+
+# Reverse mapping for display
+reverse_label_mapping:
+  0: "Normal Operation"
+  1: "Supply Fan Failure"
+  2: "Return Fan Failure"
+  3: "Compressor Failure"
+  4: "Heating Valve Stuck"
+  5: "Cooling Valve Stuck"
+  6: "Damper Stuck"
+  7: "Sensor Bias"
+  8: "Duct Imbalance"
+  9: "Valve Oscillation"
+  10: "Low Efficiency"
+
+# Data validation settings
+validation:
+  timestamp_format: "%Y-%m-%d %H:%M:%S"
+  timezone: "UTC"
+  required_columns:
+    - timestamp
+    - point_name
+    - value
+  optional_columns:
+    - unit
+    - equipment_id
+    - system_id
+    - scenario_id
+    - fault_id
+    - fault_severity
+
+# Missing data handling
+missing_data:
+  strategy: "forward_fill"  # Options: forward_fill, interpolate, drop
+  forward_fill_limit: 5  # Maximum consecutive forward fills
+  interpolation_method: "linear"  # Options: linear, cubic, nearest
+
+# Data splitting strategy
+splitting:
+  strategy: "scenario_based"  # Options: scenario_based, leave_one_out, random
+  test_size: 0.2
+  validation_size: 0.1
+  random_seed: 42
+  stratify_by: "fault_id"  # Ensure balanced fault distribution
+
+# Resampling settings
+resampling:
+  target_frequency: "1min"  # Resample to 1-minute intervals
+  method: "mean"  # Options: mean, forward_fill, interpolate
+
+# Feature scaling
+scaling:
+  method: "standardization"  # Options: standardization, normalization, robust
+  fit_on: "training"  # Fit scaler on training data only
+
+# Data quality thresholds
+quality_thresholds:
+  max_missing_percentage: 0.3  # Allow up to 30% missing values
+  min_samples_per_scenario: 100  # Minimum samples per fault scenario
+  max_outlier_std: 5  # Mark values > 5 std as outliers
+
+# Logging and monitoring
+logging:
+  level: "INFO"
+  log_file: "logs/dataset.log"
+  log_data_summary: true
+  log_missing_data_report: true

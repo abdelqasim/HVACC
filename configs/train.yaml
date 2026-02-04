@@ -1,0 +1,206 @@
+# Model Training Configuration
+# Specifies model type, hyperparameters, training strategy, and MLflow settings
+
+# Model selection
+model:
+  type: "lightgbm"  # Options: lightgbm, xgboost, random_forest
+  
+  # LightGBM hyperparameters
+  hyperparams:
+    num_leaves: 31
+    learning_rate: 0.05
+    n_estimators: 100
+    max_depth: -1
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.0
+    reg_lambda: 1.0
+    random_state: 42
+    verbose: -1
+    n_jobs: -1
+
+# Training strategy
+training:
+  # Cross-validation
+  cv_strategy: "stratified_kfold"  # Options: stratified_kfold, time_series_split, leave_one_out
+  cv_folds: 5
+  
+  # Random seed for reproducibility
+  random_seed: 42
+  
+  # Class imbalance handling
+  class_weights: true  # Automatically compute class weights
+  scale_pos_weight: null  # Override automatic weight (if null, compute from data)
+  
+  # Sampling strategy
+  sampling_strategy: "balanced"  # Options: balanced, over_sample, under_sample, none
+  
+  # Probability calibration
+  calibration:
+    enabled: true
+    method: "platt"  # Options: platt, isotonic
+    calibration_split: 0.2  # Use 20% of validation data for calibration
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    metric: "auc"  # Options: auc, f1, loss
+    patience: 10  # Stop if no improvement for 10 rounds
+    min_delta: 0.001
+
+# Two-stage training approach
+two_stage:
+  enabled: true
+  
+  # Stage 1: Fault detection (binary classification)
+  stage1:
+    name: "fault_detection"
+    task: "binary"
+    positive_class: 1  # 1 = fault present
+    threshold: 0.5
+    
+  # Stage 2: Fault classification (multi-class)
+  stage2:
+    name: "fault_classification"
+    task: "multiclass"
+    threshold: 0.5
+    # Only run on samples predicted as faulted in stage 1
+    run_on_predicted_faults_only: true
+
+# Alternative: Single-stage multi-class training
+single_stage:
+  enabled: false
+  task: "multiclass"
+  include_normal_class: true
+
+# Data splitting
+splitting:
+  strategy: "scenario_based"  # Options: scenario_based, temporal, random
+  test_size: 0.2
+  validation_size: 0.1
+  random_seed: 42
+  
+  # Ensure no leakage
+  leakage_prevention:
+    split_by_scenario: true
+    split_by_equipment: false
+
+# Feature selection during training
+feature_selection:
+  enabled: false
+  method: "permutation"  # Options: permutation, shap, mutual_information
+  n_features: 50
+  threshold: 0.01
+
+# MLflow tracking configuration
+mlflow:
+  enabled: true
+  tracking_uri: "http://localhost:5000"  # Update for Docker: http://mlflow:5000
+  experiment_name: "hvac_fdd_training"
+  run_name_prefix: "rtu_fault_detection"
+  
+  # What to log
+  log_params: true
+  log_metrics: true
+  log_artifacts: true
+  log_model: true
+  
+  # Model registry
+  register_model: true
+  registered_model_name: "hvac_fdd_rtu"
+  model_tags:
+    subsystem: "rtu"
+    version: "1.0"
+    stage: "development"
+
+# Evaluation metrics
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "auc"
+    - "auprc"
+    - "confusion_matrix"
+    - "calibration_error"
+    - "brier_score"
+  
+  # Per-class metrics for multi-class
+  per_class_metrics: true
+  
+  # Threshold optimization
+  optimize_threshold: true
+  threshold_metric: "f1"  # Optimize for F1 score
+
+# Output and artifacts
+output:
+  model_dir: "models"
+  save_preprocessor: true
+  save_feature_importance: true
+  save_calibration_curve: true
+  save_confusion_matrix: true
+  save_roc_curve: true
+  save_pr_curve: true
+  
+  # Report generation
+  generate_report: true
+  report_format: ["markdown", "html"]  # Options: markdown, html, pdf
+
+# Logging
+logging:
+  level: "INFO"
+  log_file: "logs/training.log"
+  log_training_progress: true
+  log_validation_metrics: true
+  log_feature_importance: true
+
+# Performance and resource settings
+performance:
+  n_jobs: -1  # Use all available cores
+  verbose: 1
+  batch_size: 1024  # For batch processing during training
+  
+# Hyperparameter tuning (optional)
+hyperparameter_tuning:
+  enabled: false
+  method: "optuna"  # Options: optuna, grid_search, random_search
+  n_trials: 20
+  
+  # Search space for Optuna
+  search_space:
+    num_leaves: [10, 100]
+    learning_rate: [0.001, 0.1]
+    n_estimators: [50, 500]
+    min_child_samples: [5, 50]
+
+# Reproducibility
+reproducibility:
+  set_random_seeds: true
+  use_deterministic_algorithms: true
+  random_seed: 42
+  numpy_seed: 42
+  sklearn_seed: 42
+  tensorflow_seed: 42  # If using TensorFlow
+
+# Validation strategy
+validation:
+  strategy: "cross_validation"  # Options: cross_validation, holdout, time_series
+  
+  # Time series validation (if applicable)
+  time_series:
+    gap: 0  # Gap between train and test
+    test_size: 0.2
+    
+  # Holdout validation
+  holdout:
+    test_size: 0.2
+    validation_size: 0.1
+
+# Post-training
+post_training:
+  save_best_model: true
+  best_model_metric: "f1"  # Metric to use for selecting best model
+  save_training_history: true
+  generate_summary_report: true
