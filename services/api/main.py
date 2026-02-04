@@ -145,9 +145,13 @@ def _predict_from_raw_rtu_window(raw_signals: Dict[str, List[float]]) -> Dict[st
     fault_present_threshold = float(config.get("thresholds.fault_present_threshold", 0.5))
     fault_type_threshold = float(config.get("thresholds.fault_type_threshold", 0.6))
 
-    # declare fault only if (not normal) AND confidence passes threshold
+    # Decide whether we declare a fault at all
     fault_present = (pred_name != "normal") and (conf >= fault_present_threshold)
+
+    # If we don't declare a fault, force outputs to normal
     fault_type = pred_name if fault_present else "normal"
+
+    # Only show fault_type_confidence when we actually declare fault and it's strong enough
     fault_type_confidence = conf if (fault_present and conf >= fault_type_threshold) else None
 
     return {
@@ -297,13 +301,8 @@ async def predict_window(request: PredictionRequest):
 async def batch_predict(file: UploadFile = File(...)):
     if model is None or label_encoder is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
-
-    contents = await file.read()
-    df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
-    windows = create_windows(df)
-
-    tickets: List[FaultTicket] = []
-    cols = list(model.feature_name_)
+    if config is None:
+        raise HTTPException(status_code=500, detail="Config not loaded")
 
     required = {
         "RTU_SA_TEMP",
@@ -314,64 +313,181 @@ async def batch_predict(file: UploadFile = File(...)):
         "RTU_REFG_SUCT_PRES",
     }
 
-    for w in windows:
-        try:
-            raw = pivot_window_data(w["data"])
+    try:
+        contents = await file.read()
+        df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
 
-            missing_signals = sorted([s for s in required if s not in raw])
-            if missing_signals:
-                logger.warning(f"Skipping window {w.get('window_id','?')}: missing {missing_signals}")
-                continue
+        if df.empty:
+            raise HTTPException(status_code=422, detail={"error": "empty_csv", "message": "Uploaded CSV has no rows"})
 
-            out = _predict_from_raw_rtu_window(raw)
+        tickets: List[FaultTicket] = []
+        total_windows = 0
 
-            if not out["fault_present"]:
-                continue
+        # ---- Case A: WIDE CSV (preferred): timestamp + 6 signal columns ----
+        if required.issubset(df.columns):
+            # find a timestamp column
+            time_col = None
+            for c in ("timestamp", "time", "datetime", "date"):
+                if c in df.columns:
+                    time_col = c
+                    break
 
-            fault_type = out["fault_type"]
-            conf = float(out["confidence"])
-            ft_conf = out["fault_type_confidence"]
-
-            severity_level = "high" if conf >= 0.8 else "medium" if conf >= 0.6 else "low"
-
-            playbook = get_playbook_actions(fault_type)
-            recommended_checks = (playbook.get("actions") or [])[:5]
-
-            evidence = {
-                "top_features": cols[:5],
-                "proba": out["proba_map"],
-                "engineered_features": out["engineered_features"],
-                "playbook_severity": playbook.get("severity"),
-                "playbook_description": playbook.get("description"),
-            }
-
-            tickets.append(
-                FaultTicket(
-                    ticket_id=w.get("window_id", str(uuid.uuid4())),
-                    timestamp=w.get("window_start"),
-                    fault_present=True,
-                    fault_confidence=conf,
-                    fault_type=fault_type,
-                    fault_type_confidence=ft_conf,
-                    severity_score=conf,
-                    severity_level=severity_level,
-                    evidence=evidence,
-                    recommended_checks=recommended_checks,
-                    model_version=str(config.get("versioning.min_model_version", "1.0.0")),
-                    created_at=datetime.now(timezone.utc).isoformat(),
+            if time_col is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "missing_timestamp_column",
+                        "message": "Wide CSV detected (has RTU_* columns) but no timestamp column found.",
+                        "hint": "Add a 'timestamp' column (ISO8601) or rename your time column to 'timestamp'.",
+                        "columns": list(df.columns),
+                    },
                 )
+
+            # window parameters (use your config if present; otherwise safe defaults)
+            window_size = int(config.get("windowing.window_size", 20))
+            stride = int(config.get("windowing.stride", window_size))
+
+            if len(df) < window_size:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "not_enough_rows",
+                        "message": f"CSV has {len(df)} rows but window_size is {window_size}.",
+                        "hint": f"Provide at least {window_size} samples per signal.",
+                    },
+                )
+
+            for start in range(0, len(df) - window_size + 1, stride):
+                end = start + window_size
+                total_windows += 1
+
+                raw = {sig: df.iloc[start:end][sig].astype(float).tolist() for sig in required}
+
+                try:
+                    out = _predict_from_raw_rtu_window(raw)
+                except HTTPException as he:
+                    # invalid window (e.g., too short) -> skip
+                    logger.warning(f"Skipping window {start}:{end} due to HTTPException: {he.detail}")
+                    continue
+
+                if not out.get("fault_present", False):
+                    continue
+
+                fault_type = out["fault_type"]
+                conf = float(out["confidence"])
+                ft_conf = out.get("fault_type_confidence")
+
+                severity_level = "high" if conf >= 0.8 else "medium" if conf >= 0.6 else "low"
+
+                playbook = get_playbook_actions(fault_type)
+                recommended_checks = (playbook.get("actions") or [])[:5]
+
+                evidence = {
+                    "top_features": out["feature_names"][:5],
+                    "proba": out["proba_map"],
+                    "playbook_severity": playbook.get("severity"),
+                    "playbook_description": playbook.get("description"),
+                }
+
+                # window timestamp: take first row timestamp in that window
+                ts = str(df.iloc[start][time_col])
+
+                tickets.append(
+                    FaultTicket(
+                        ticket_id=str(uuid.uuid4()),
+                        timestamp=ts,
+                        fault_present=True,
+                        fault_confidence=conf,
+                        fault_type=fault_type,
+                        fault_type_confidence=ft_conf,
+                        severity_score=conf,
+                        severity_level=severity_level,
+                        evidence=evidence,
+                        recommended_checks=recommended_checks,
+                        model_version=str(config.get("versioning.min_model_version", "1.0.0")),
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+
+            return BatchPredictionResponse(
+                tickets=tickets,
+                total_windows=total_windows,
+                faults_detected=len(tickets),
+                processing_time_seconds=0.0,
             )
 
-        except Exception as e:
-            logger.warning(f"Error processing window {w.get('window_id','?')}: {e}")
-            continue
+        # ---- Case B: LONG CSV: fallback to your existing pipeline ----
+        # Expected columns are not guaranteed; handle errors cleanly.
+        windows = create_windows(df)
+        total_windows = len(windows)
 
-    return BatchPredictionResponse(
-        tickets=tickets,
-        total_windows=len(windows),
-        faults_detected=len(tickets),
-        processing_time_seconds=0.0,
-    )
+        cols = list(model.feature_name_)
+        for w in windows:
+            try:
+                raw = pivot_window_data(w["data"])
+
+                missing_signals = sorted([s for s in required if s not in raw])
+                if missing_signals:
+                    logger.warning(f"Skipping window {w.get('window_id','?')}: missing {missing_signals}")
+                    continue
+
+                out = _predict_from_raw_rtu_window(raw)
+                if not out.get("fault_present", False):
+                    continue
+
+                fault_type = out["fault_type"]
+                conf = float(out["confidence"])
+                ft_conf = out.get("fault_type_confidence")
+
+                severity_level = "high" if conf >= 0.8 else "medium" if conf >= 0.6 else "low"
+
+                playbook = get_playbook_actions(fault_type)
+                recommended_checks = (playbook.get("actions") or [])[:5]
+
+                evidence = {
+                    "top_features": cols[:5],
+                    "proba": out["proba_map"],
+                    "playbook_severity": playbook.get("severity"),
+                    "playbook_description": playbook.get("description"),
+                }
+
+                tickets.append(
+                    FaultTicket(
+                        ticket_id=w.get("window_id", str(uuid.uuid4())),
+                        timestamp=w.get("window_start"),
+                        fault_present=True,
+                        fault_confidence=conf,
+                        fault_type=fault_type,
+                        fault_type_confidence=ft_conf,
+                        severity_score=conf,
+                        severity_level=severity_level,
+                        evidence=evidence,
+                        recommended_checks=recommended_checks,
+                        model_version=str(config.get("versioning.min_model_version", "1.0.0")),
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+
+            except HTTPException as he:
+                logger.warning(f"Skipping window {w.get('window_id','?')} due to HTTPException: {he.detail}")
+                continue
+            except Exception as e:
+                logger.warning(f"Error processing window {w.get('window_id','?')}: {e}")
+                continue
+
+        return BatchPredictionResponse(
+            tickets=tickets,
+            total_windows=total_windows,
+            faults_detected=len(tickets),
+            processing_time_seconds=0.0,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Batch prediction error")
+        # IMPORTANT: return JSON error, not plain text "Internal Server Error"
+        raise HTTPException(status_code=500, detail={"error": "batch_predict_failed", "message": str(e)})
 
 
 @app.post("/explain", response_model=ExplanationResponse)
