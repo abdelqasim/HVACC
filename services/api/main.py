@@ -142,17 +142,17 @@ def _predict_from_raw_rtu_window(raw_signals: Dict[str, List[float]]) -> Dict[st
     proba_map = {id_to_name.get(cid, str(cid)): float(p) for cid, p in zip(class_ids, proba)}
 
     # 6) Threshold logic (single source of truth)
-    fault_present_threshold = float(config.get("thresholds.fault_present_threshold", 0.5))
-    fault_type_threshold = float(config.get("thresholds.fault_type_threshold", 0.6))
+    fault_present_threshold = float(config.get("thresholds.fault_present_threshold", 0.6))
 
-    # Decide whether we declare a fault at all
-    fault_present = (pred_name != "normal") and (conf >= fault_present_threshold)
-
-    # If we don't declare a fault, force outputs to normal
-    fault_type = pred_name if fault_present else "normal"
-
-    # Only show fault_type_confidence when we actually declare fault and it's strong enough
-    fault_type_confidence = conf if (fault_present and conf >= fault_type_threshold) else None
+    # If the model says "normal", it's not a fault no matter the confidence
+    if pred_name == "normal":
+        fault_present = False
+        fault_type = "normal"
+        fault_type_confidence = None
+    else:
+        fault_present = conf >= fault_present_threshold
+        fault_type = pred_name if fault_present else "normal"
+        fault_type_confidence = conf if fault_present else None
 
     return {
         "pred_id": pred_id,
