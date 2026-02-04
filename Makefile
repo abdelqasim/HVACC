@@ -1,5 +1,8 @@
-.PHONY: help setup install download-data train evaluate test api ui compose-up compose-down clean
-
+.PHONY: help setup install download-data train evaluate test check api ui compose-up compose-down clean
+VENV := .venv
+PY := $(VENV)/bin/python
+PIP := $(VENV)/bin/pip
+PYTEST := $(VENV)/bin/pytest
 help:
 	@echo "HVAC FDD Platform - Available Commands"
 	@echo "======================================"
@@ -41,12 +44,11 @@ evaluate:
 
 test:
 	@echo "Running tests..."
-	pytest tests/ -v
+	$(PYTEST) tests/ -v
 
 api:
 	@echo "Starting FastAPI service..."
-	python -m uvicorn services.api.main:app --reload --host 0.0.0.0 --port 8000
-
+	$(PY) -m uvicorn services.api.main:app --reload --host 0.0.0.0 --port 8000
 ui:
 	@echo "Starting Streamlit UI..."
 	streamlit run services/ui/app.py
@@ -80,3 +82,13 @@ clean:
 	@echo "Cleanup complete!"
 
 .DEFAULT_GOAL := help
+check:
+	@echo "Running API smoke tests..."
+	@/bin/zsh tests/api/smoke.sh
+	@/bin/zsh tests/api/batch_smoke.sh
+	@echo "Running pytest..."
+	@$(PY) -m pytest tests/ -v
+
+check-docker:
+	@base=http://127.0.0.1:8000 /bin/zsh tests/api/smoke.sh
+	@base=http://127.0.0.1:8000 CSV=tests/fixtures/sample_telemetry.csv /bin/zsh tests/api/batch_smoke.sh
