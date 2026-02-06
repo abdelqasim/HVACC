@@ -8,3 +8,9 @@ cache/
 logs/
 reports/
 *.log
+
+# Raw data (never commit)
+data/raw/
+
+# Optional: large exports
+data/interim/
