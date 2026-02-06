@@ -93,15 +93,15 @@ with tab1:
         else:
             st.info("Using sample HVAC telemetry data")
             # Generate sample data
-            timestamps = pd.date_range("2023-01-01", periods=1000, freq="1min")
+            timestamps = pd.date_range(datetime.now() - timedelta(minutes=1000), periods=1000, freq="1min")
             sample_data = {
                 "timestamp": timestamps,
-                "RTU_SA_TEMP": np.random.normal(14, 0.5, len(timestamps)),
-                "RTU_RA_TEMP": np.random.normal(22, 0.5, len(timestamps)),
-                "RTU_OA_TEMP": np.random.normal(10, 0.8, len(timestamps)),
-                "RTU_SA_FAN_WATT": np.random.normal(500, 40, len(timestamps)),
-                "RTU_REFG_COND_PRES": np.random.normal(12, 1.0, len(timestamps)),
-                "RTU_REFG_SUCT_PRES": np.random.normal(3, 0.4, len(timestamps)),
+                "RTU_SA_TEMP": np.random.normal(14, 1.5, 1000),
+                "RTU_RA_TEMP": np.random.normal(22, 1.0, 1000),
+                "RTU_OA_TEMP": np.random.normal(10, 3.0, 1000),
+                "RTU_SA_FAN_WATT": np.random.normal(500, 40, 1000).clip(min=0),
+                "RTU_REFG_COND_PRES": np.random.normal(12, 1.0, 1000).clip(min=0),
+                "RTU_REFG_SUCT_PRES": np.random.normal(3, 0.5, 1000).clip(min=0),
             }
             df = pd.DataFrame(sample_data)
             st.dataframe(df.head())
