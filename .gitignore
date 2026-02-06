@@ -14,3 +14,6 @@ data/raw/
 
 # Optional: large exports
 data/interim/
+
+# Raw data (never commit)
+data/raw/
