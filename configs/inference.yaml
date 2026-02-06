@@ -6,7 +6,7 @@ model:
   model_name: "hvac_fdd_rtu"
   model_alias: "Production"  # Options: Production, Staging, development
   load_from: "mlflow"  # Options: mlflow, local_path
-  mlflow_tracking_uri: "http://localhost:5000"  # Update for Docker: http://mlflow:5000
+  mlflow_tracking_uri: "http://mlflow:5000"  # Update for Docker: http://mlflow:5000
   
   # If loading from local path
   local_model_path: "models/best_model.pkl"

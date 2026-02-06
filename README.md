@@ -108,6 +108,15 @@ ls -la data/raw/Simulated\ RTU/
 ```
 
 ---
+.PHONY: check smoke batch_smoke
 
+check: smoke batch_smoke
+	@echo "OK: full check passed"
+
+smoke:
+	. .venv/bin/activate && /bin/zsh tests/api/smoke.sh
+
+batch_smoke:
+	. .venv/bin/activate && /bin/zsh tests/api/batch_smoke.sh
 **Last Updated**: February 2026
 **Version**: 1.0.0

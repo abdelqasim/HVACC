@@ -35,13 +35,14 @@ services:
       DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
+      - infra_mlflow_artifacts:/mlflow/artifacts
     ports:
-      - "5000:5000"
+      - "5001:5000"
     command: mlflow server --backend-store-uri postgresql://mlflow_user:mlflow_password@postgres:5432/mlflow_db --default-artifact-root /mlflow/artifacts --host 0.0.0.0
     networks:
       - hvac_fdd_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/ >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,8 +50,8 @@ services:
   # FastAPI inference service
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ..
+      dockerfile: infra/Dockerfile.api
     container_name: hvac_fdd_api
     depends_on:
       mlflow:
@@ -61,6 +62,7 @@ services:
       API_PORT: 8000
     volumes:
       - ../:/app
+      - infra_mlflow_artifacts:/mlflow/artifacts
     ports:
       - "8000:8000"
     command: python -m uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -75,8 +77,8 @@ services:
   # Streamlit UI
   ui:
     build:
-      context: .
-      dockerfile: Dockerfile.ui
+      context: ..
+      dockerfile: infra/Dockerfile.ui
     container_name: hvac_fdd_ui
     depends_on:
       api:
@@ -94,6 +96,8 @@ services:
 volumes:
   postgres_data:
   mlflow_artifacts:
+  infra_postgres_data:
+  infra_mlflow_artifacts:
 
 networks:
   hvac_fdd_network:
