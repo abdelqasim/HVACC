@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # PostgreSQL database for MLflow
@@ -35,7 +35,6 @@ services:
       DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
-      - infra_mlflow_artifacts:/mlflow/artifacts
     ports:
       - "5001:5000"
     command: mlflow server --backend-store-uri postgresql://mlflow_user:mlflow_password@postgres:5432/mlflow_db --default-artifact-root /mlflow/artifacts --host 0.0.0.0
@@ -62,7 +61,7 @@ services:
       API_PORT: 8000
     volumes:
       - ../:/app
-      - infra_mlflow_artifacts:/mlflow/artifacts
+      - mlflow_artifacts:/mlflow/artifacts
     ports:
       - "8000:8000"
     command: python -m uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -96,9 +95,6 @@ services:
 volumes:
   postgres_data:
   mlflow_artifacts:
-  infra_postgres_data:
-  infra_mlflow_artifacts:
-
 networks:
   hvac_fdd_network:
     driver: bridge

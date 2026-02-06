@@ -9,6 +9,8 @@ import requests
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+import os
+import requests
 import logging
 
 # Setup page
@@ -24,8 +26,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # API endpoint
-API_URL = "http://localhost:8000"
-
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 # Title
 st.title("🔧 HVAC Fault Detection & Diagnostics Platform")
 
@@ -92,13 +93,15 @@ with tab1:
         else:
             st.info("Using sample HVAC telemetry data")
             # Generate sample data
-            timestamps = pd.date_range('2023-01-01', periods=1000, freq='1min')
+            timestamps = pd.date_range("2023-01-01", periods=1000, freq="1min")
             sample_data = {
-                'timestamp': timestamps,
-                'supply_temp': np.random.normal(68, 2, 1000),
-                'return_temp': np.random.normal(72, 2, 1000),
-                'supply_fan_speed': np.random.normal(0.85, 0.05, 1000),
-                'supply_pressure': np.random.normal(2.5, 0.3, 1000),
+                "timestamp": timestamps,
+                "RTU_SA_TEMP": np.random.normal(14, 0.5, len(timestamps)),
+                "RTU_RA_TEMP": np.random.normal(22, 0.5, len(timestamps)),
+                "RTU_OA_TEMP": np.random.normal(10, 0.8, len(timestamps)),
+                "RTU_SA_FAN_WATT": np.random.normal(500, 40, len(timestamps)),
+                "RTU_REFG_COND_PRES": np.random.normal(12, 1.0, len(timestamps)),
+                "RTU_REFG_SUCT_PRES": np.random.normal(3, 0.4, len(timestamps)),
             }
             df = pd.DataFrame(sample_data)
             st.dataframe(df.head())

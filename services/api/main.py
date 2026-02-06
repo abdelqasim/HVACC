@@ -1,20 +1,23 @@
 """
 FastAPI service for HVAC FDD Platform
 """
-from fastapi import FastAPI, File, UploadFile, HTTPException,Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 import os
+import io
+import uuid
+from pathlib import Path
+from datetime import datetime, timezone
 from typing import List, Dict, Any
+
 import pandas as pd
 import numpy as np
 import mlflow
 import joblib
 import yaml
-import io
-import uuid
-from fastapi.responses import JSONResponse
-from pathlib import Path
-from datetime import datetime, timezone
+import requests  # <-- needed for real-time MLflow ping in /health
 
 from src.common.schemas import (
     FaultTicket,
@@ -52,7 +55,7 @@ app.add_middleware(
 model = None
 label_encoder: Dict[str, int] | None = None  # name -> id
 config = None
-mlflow_connected = False
+mlflow_connected = False  # set at startup; /health also performs a live ping
 
 
 def _load_local_artifacts() -> None:
@@ -77,6 +80,27 @@ def _load_local_artifacts() -> None:
 def _invert_label_map(name_to_id: Dict[str, int]) -> Dict[int, str]:
     """name->id to id->name"""
     return {int(v): str(k) for k, v in name_to_id.items()}
+
+
+def _effective_mlflow_uri() -> str:
+    # In docker, env var MUST win.
+    uri = os.getenv("MLFLOW_TRACKING_URI")
+    if uri:
+        return uri
+    # Local dev fallback
+    if config is not None:
+        return config.get("model.mlflow_tracking_uri") or "http://localhost:5001"
+    return "http://localhost:5001"
+
+def _mlflow_ping() -> bool:
+    try:
+        mlflow.set_tracking_uri(_effective_mlflow_uri())
+        client = mlflow.tracking.MlflowClient()
+        # Minimal call that forces a real round-trip to the tracking server
+        client.search_experiments(max_results=1)
+        return True
+    except Exception:
+        return False
 
 
 def _predict_from_raw_rtu_window(raw_signals: Dict[str, List[float]]) -> Dict[str, Any]:
@@ -107,10 +131,7 @@ def _predict_from_raw_rtu_window(raw_signals: Dict[str, List[float]]) -> Dict[st
     except ValueError as e:
         raise HTTPException(
             status_code=422,
-            detail={
-                "error": "invalid_window",
-                "message": str(e),
-            },
+            detail={"error": "invalid_window", "message": str(e)},
         )
 
     # 2) Build X in exact feature order expected by model
@@ -196,13 +217,15 @@ async def startup_event():
     try:
         config = load_config("configs/inference.yaml")
 
-        tracking_uri = config.get("model.mlflow_tracking_uri", "http://localhost:5000")
+        tracking_uri = _effective_mlflow_uri()
         model_name = config.get("model.model_name", "hvac_fdd_rtu")
         model_alias = config.get("model.model_alias", "Production")
 
         mlflow.set_tracking_uri(tracking_uri)
+        logger.info(f"MLflow tracking URI: {tracking_uri}")
 
         try:
+            # ✅ Use alias-based loading (future-proof; stages are being deprecated)
             model_uri = f"models:/{model_name}@{model_alias}"
             model = mlflow.sklearn.load_model(model_uri)
             mlflow_connected = True
@@ -217,7 +240,7 @@ async def startup_event():
 
         except Exception as e:
             mlflow_connected = False
-            logger.warning(f"Could not load model from MLflow: {e}")
+            logger.warning(f"Could not load model from MLflow (uri={tracking_uri}): {e}")
             _load_local_artifacts()
 
         logger.info("API startup complete")
@@ -233,7 +256,9 @@ async def health_check():
         status="healthy",
         version="1.0.0",
         model_loaded=(model is not None and label_encoder is not None),
-        mlflow_connected=bool(mlflow_connected),
+        # live check so health stays truthful
+        mlflow_connected=_mlflow_ping(),
+
     )
 
 
@@ -249,10 +274,8 @@ async def predict_window(request: PredictionRequest):
     try:
         out = _predict_from_raw_rtu_window(request.data)
     except HTTPException:
-        # keep clean API errors as-is
         raise
     except ValueError as e:
-        # BAD USER INPUT -> 422 (not 500)
         raise HTTPException(
             status_code=422,
             detail={
@@ -296,6 +319,7 @@ async def predict_window(request: PredictionRequest):
         model_version=config.get("versioning.min_model_version", "1.0.0"),
         created_at=datetime.now(timezone.utc).isoformat(),
     )
+
 
 @app.post("/batch_predict", response_model=BatchPredictionResponse)
 async def batch_predict(file: UploadFile = File(...)):
@@ -366,7 +390,6 @@ async def batch_predict(file: UploadFile = File(...)):
                 try:
                     out = _predict_from_raw_rtu_window(raw)
                 except HTTPException as he:
-                    # invalid window (e.g., too short) -> skip
                     logger.warning(f"Skipping window {start}:{end} due to HTTPException: {he.detail}")
                     continue
 
@@ -389,7 +412,6 @@ async def batch_predict(file: UploadFile = File(...)):
                     "playbook_description": playbook.get("description"),
                 }
 
-                # window timestamp: take first row timestamp in that window
                 ts = str(df.iloc[start][time_col])
 
                 tickets.append(
@@ -417,7 +439,6 @@ async def batch_predict(file: UploadFile = File(...)):
             )
 
         # ---- Case B: LONG CSV: fallback to your existing pipeline ----
-        # Expected columns are not guaranteed; handle errors cleanly.
         windows = create_windows(df)
         total_windows = len(windows)
 
@@ -486,7 +507,6 @@ async def batch_predict(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.exception("Batch prediction error")
-        # IMPORTANT: return JSON error, not plain text "Internal Server Error"
         raise HTTPException(status_code=500, detail={"error": "batch_predict_failed", "message": str(e)})
 
 
@@ -501,12 +521,15 @@ async def explain(request: ExplanationRequest):
         playbook_actions=["Contact HVAC technician for inspection"],
     )
 
+
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(
         status_code=422,
         content={"detail": {"error": "invalid_window", "message": str(exc)}},
     )
+
+
 if __name__ == "__main__":
     import uvicorn
 

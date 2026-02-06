@@ -1,19 +1,67 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Envs
+.venv/
+venv/
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# OS
 .DS_Store
-mlruns/
-data/feature_cache/
-cache/
+
+# Logs / temp
 logs/
-reports/
 *.log
+temp_data.csv
+*.tmp
 
-# Raw data (never commit)
+# MLflow local state
+mlflow.db
+mlruns/
+mlartifacts/
+
+# Data (keep raw out unless tiny + intentional)
 data/raw/
-
-# Optional: large exports
 data/interim/
+data/external/
 
-# Raw data (never commit)
-data/raw/
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+**/.docker/
+
+# Local AI tooling
+.ai/
+
+# Training outputs
+confusion_matrix.csv
+*.csv
+
+# Models (keep label map, ignore binary artifacts)
+models/*.joblib
+models/*.pkl
+models/*.pickle
+
+# MLflow local state
+mlflow.db
+mlruns/
+mlartifacts/
