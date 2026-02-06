@@ -1,18 +1,18 @@
-# Python
+# -------------------------
+# Python / tooling
+# -------------------------
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.so
 *.egg-info/
-dist/
 build/
-.coverage
-.coverage.*
+dist/
+.coverage*
 htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
 
 # Envs
 .venv/
@@ -20,60 +20,47 @@ venv/
 .env
 .env.*
 
-# IDE
+# IDE / OS
 .idea/
 .vscode/
-
-# OS
 .DS_Store
 
+# -------------------------
 # Logs / temp
+# -------------------------
 logs/
 *.log
-temp_data.csv
 *.tmp
+temp_*.csv
+temp_data.csv
 
+# -------------------------
 # MLflow local state
+# -------------------------
 mlflow.db
 mlruns/
 mlartifacts/
 
-# Data (keep raw out unless tiny + intentional)
+# -------------------------
+# Data
+# -------------------------
 data/raw/
 data/interim/
 data/external/
+# Keep processed datasets (needed for retraining)
+!data/processed/
+!data/processed/*.csv
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Docker
-**/.docker/
-
-# Local AI tooling
-.ai/
-
-# Training outputs
-confusion_matrix.csv
-*.csv
-
-# Models (keep label map, ignore binary artifacts)
+# -------------------------
+# Model artifacts
+# -------------------------
 models/*.joblib
 models/*.pkl
 models/*.pickle
-
-# MLflow local state
-mlflow.db
-mlruns/
-mlartifacts/
-
-# model artifacts
-models/*.joblib
-models/*.pkl
 models/*.bin
-models/label_map.yaml
+# Keep label map (small, required)
+!models/label_map.yaml
+!models/README.md
 
-# model artifacts
-models/*.joblib
-models/*.pkl
-models/*.bin
-models/label_map.yaml
+# Local AI tooling
+.ai/
