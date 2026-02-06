@@ -71,3 +71,9 @@ models/*.joblib
 models/*.pkl
 models/*.bin
 models/label_map.yaml
+
+# model artifacts
+models/*.joblib
+models/*.pkl
+models/*.bin
+models/label_map.yaml
