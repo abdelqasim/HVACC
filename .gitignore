@@ -65,3 +65,9 @@ models/*.pickle
 mlflow.db
 mlruns/
 mlartifacts/
+
+# model artifacts
+models/*.joblib
+models/*.pkl
+models/*.bin
+models/label_map.yaml
