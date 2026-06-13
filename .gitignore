@@ -63,4 +63,4 @@ models/*.bin
 !models/README.md
 
 # Local AI tooling
-.ai/
+.ai/.idea/
