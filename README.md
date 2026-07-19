@@ -2,7 +2,52 @@
 
 A production-ready machine learning system for detecting and diagnosing faults in HVAC equipment using building telemetry time series data. This platform provides automated fault detection, classification, severity estimation, and actionable diagnostics with a complete MLOps pipeline.
 
-## 🚀 Quick Start
+## Results
+
+Evaluated on the processed feature set (990 sliding-window samples, 6 balanced fault classes, 165 each), LightGBM classifier, 80/20 stratified split:
+
+| Metric | Score |
+|---|---|
+| Test Accuracy | 90.9% |
+| F1 Macro | 0.909 |
+| F1 Weighted | 0.909 |
+
+Per-class breakdown:
+
+| Fault Class | Precision | Recall | F1 |
+|---|---|---|---|
+| Evaporator Fouling | 1.000 | 1.000 | 1.000 |
+| Refrigerant Overcharge | 1.000 | 1.000 | 1.000 |
+| Condenser Fouling | 0.943 | 1.000 | 0.971 |
+| Liquid Line Restriction | 1.000 | 0.909 | 0.952 |
+| Normal | 0.750 | 0.818 | 0.783 |
+| Refrigerant Undercharge | 0.774 | 0.727 | 0.750 |
+
+The model separates most fault types cleanly. The remaining confusion is between `normal` and `refrigerant_undercharge`, which makes physical sense — mild undercharge produces telemetry patterns close to normal operation before symptoms become pronounced.
+
+## Architecture
+
+```
+Raw HVAC Telemetry (LBNL RTU dataset)
+        ↓
+Ingestion + Schema Validation
+        ↓
+Sliding-Window Feature Engineering
+(mean, std, min, max, median, quantiles, slope, delta, autocorrelation, oscillation energy)
+        ↓
+LightGBM Classifier (class-weight balanced)
+        ↓
+   ┌────────────┬─────────────────┐
+   ↓            ↓                 ↓
+FastAPI      Diagnostics      MLflow
+/predict_window  Fault playbook   Experiment tracking
+/batch_predict   + explainer      + model registry
+/explain
+   ↓
+Streamlit Dashboard (fault timeline, ticket detail, HTML/PDF export)
+```
+
+## Quick Start
 
 ### 1. Setup Environment
 ```bash
@@ -17,7 +62,8 @@ pip install scikit-learn lightgbm joblib pyyaml scipy
 ```
 
 ### 2. Dataset
-Download Simulated RTU data sets.zip from the LBNL RTU dataset page and extract it into data/raw/Simulated RTU/
+Download `Simulated RTU data sets.zip` from the LBNL RTU dataset page and extract it into `data/raw/Simulated RTU/`
+
 ### 3. Train the Model
 Run the end-to-end training pipeline to process the raw data and train the diagnostic model:
 ```bash
@@ -40,7 +86,7 @@ python3 -m uvicorn services.api.main:app --reload
 streamlit run services/ui/app.py
 ```
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 hvac_fdd_platform/
@@ -108,15 +154,6 @@ ls -la data/raw/Simulated\ RTU/
 ```
 
 ---
-.PHONY: check smoke batch_smoke
 
-check: smoke batch_smoke
-	@echo "OK: full check passed"
-
-smoke:
-	. .venv/bin/activate && /bin/zsh tests/api/smoke.sh
-
-batch_smoke:
-	. .venv/bin/activate && /bin/zsh tests/api/batch_smoke.sh
-**Last Updated**: February 2026
+**Last Updated**: July 2026
 **Version**: 1.0.0
